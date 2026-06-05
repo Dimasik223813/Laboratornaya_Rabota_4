@@ -1,0 +1,77 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: goapp_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: student
+      POSTGRES_PASSWORD: student
+      POSTGRES_DB: goapp_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - goapp_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U student -d goapp_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: goapp_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - goapp_network
+    command: redis-server --requirepass redis_secure_password_change_in_prod --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "--pass", "redis_secure_password_change_in_prod", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build: .
+    container_name: goapp_app
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      APP_ENV: development
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: student
+      DB_PASSWORD: student
+      DB_NAME: goapp_db
+      DB_SSLMODE: disable
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: redis_secure_password_change_in_prod
+      REDIS_DB: 0
+      JWT_ACCESS_SECRET: your-access-secret-key
+      JWT_REFRESH_SECRET: your-refresh-secret-key
+      JWT_ACCESS_EXPIRATION: 15m
+      JWT_REFRESH_EXPIRATION: 168h
+      APP_PORT: 8080
+      CACHE_TTL_DEFAULT: 300
+    networks:
+      - goapp_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  goapp_network:
+    driver: bridge
